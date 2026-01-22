@@ -1,0 +1,149 @@
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+
+local Player = Players.LocalPlayer
+local Character = Player.Character or Player.CharacterAdded:Wait()
+local Humanoid = Character:WaitForChild("Humanoid")
+local HRP = Character:WaitForChild("HumanoidRootPart")
+
+--// STATE
+local Flying = false
+local VehicleFly = false
+local FlySpeed = 80
+
+local BV, BG
+local Direction = Vector3.zero
+
+--// UI
+local Gui = Instance.new("ScreenGui", Player.PlayerGui)
+Gui.Name = "FlyGui"
+Gui.ResetOnSpawn = false
+
+local Frame = Instance.new("Frame", Gui)
+Frame.Size = UDim2.fromScale(0.25, 0.3)
+Frame.Position = UDim2.fromScale(0.05, 0.35)
+Frame.BackgroundColor3 = Color3.fromRGB(20,20,20)
+Frame.BorderSizePixel = 0
+Frame.Active = true
+Frame.Draggable = true
+
+local UICorner = Instance.new("UICorner", Frame)
+UICorner.CornerRadius = UDim.new(0,12)
+
+local function button(text, pos)
+	local b = Instance.new("TextButton", Frame)
+	b.Size = UDim2.fromScale(0.9, 0.2)
+	b.Position = pos
+	b.Text = text
+	b.BackgroundColor3 = Color3.fromRGB(40,40,40)
+	b.TextColor3 = Color3.new(1,1,1)
+	b.Font = Enum.Font.GothamBold
+	b.TextScaled = true
+	Instance.new("UICorner", b)
+	return b
+end
+
+local FlyBtn = button("FLY : OFF", UDim2.fromScale(0.05,0.05))
+local VehicleBtn = button("VEHICLE FLY : OFF", UDim2.fromScale(0.05,0.3))
+
+--// SPEED SLIDER
+local SliderBg = Instance.new("Frame", Frame)
+SliderBg.Size = UDim2.fromScale(0.9, 0.15)
+SliderBg.Position = UDim2.fromScale(0.05,0.6)
+SliderBg.BackgroundColor3 = Color3.fromRGB(50,50,50)
+Instance.new("UICorner", SliderBg)
+
+local Slider = Instance.new("Frame", SliderBg)
+Slider.Size = UDim2.fromScale(0.3,1)
+Slider.BackgroundColor3 = Color3.fromRGB(0,170,255)
+Instance.new("UICorner", Slider)
+
+local SpeedText = Instance.new("TextLabel", SliderBg)
+SpeedText.Size = UDim2.fromScale(1,1)
+SpeedText.BackgroundTransparency = 1
+SpeedText.Text = "Speed: 80"
+SpeedText.TextColor3 = Color3.new(1,1,1)
+SpeedText.Font = Enum.Font.GothamBold
+SpeedText.TextScaled = true
+
+--// FLY FUNCTIONS
+local function startFly(part)
+	BV = Instance.new("BodyVelocity", part)
+	BV.MaxForce = Vector3.new(1e5,1e5,1e5)
+
+	BG = Instance.new("BodyGyro", part)
+	BG.MaxTorque = Vector3.new(1e5,1e5,1e5)
+	BG.CFrame = part.CFrame
+end
+
+local function stopFly()
+	if BV then BV:Destroy() BV = nil end
+	if BG then BG:Destroy() BG = nil end
+end
+
+--// BUTTONS
+FlyBtn.MouseButton1Click:Connect(function()
+	Flying = not Flying
+	FlyBtn.Text = "FLY : " .. (Flying and "ON" or "OFF")
+
+	if Flying then
+		startFly(HRP)
+	else
+		stopFly()
+	end
+end)
+
+VehicleBtn.MouseButton1Click:Connect(function()
+	VehicleFly = not VehicleFly
+	VehicleBtn.Text = "VEHICLE FLY : " .. (VehicleFly and "ON" or "OFF")
+end)
+
+--// SLIDER CONTROL
+local dragging = false
+SliderBg.InputBegan:Connect(function(i)
+	if i.UserInputType == Enum.UserInputType.MouseButton1 then
+		dragging = true
+	end
+end)
+
+UserInputService.InputEnded:Connect(function(i)
+	if i.UserInputType == Enum.UserInputType.MouseButton1 then
+		dragging = false
+	end
+end)
+
+RunService.RenderStepped:Connect(function()
+	if dragging then
+		local x = math.clamp(
+			(UserInputService:GetMouseLocation().X - SliderBg.AbsolutePosition.X)
+			/ SliderBg.AbsoluteSize.X, 0, 1
+		)
+		Slider.Size = UDim2.fromScale(x,1)
+		FlySpeed = math.floor(20 + (x * 180))
+		SpeedText.Text = "Speed: "..FlySpeed
+	end
+end)
+
+--// MOVEMENT
+RunService.RenderStepped:Connect(function()
+	if Flying and BV and BG then
+		local cam = workspace.CurrentCamera
+		Direction = Vector3.zero
+
+		if UserInputService:IsKeyDown(Enum.KeyCode.W) then Direction += cam.CFrame.LookVector end
+		if UserInputService:IsKeyDown(Enum.KeyCode.S) then Direction -= cam.CFrame.LookVector end
+		if UserInputService:IsKeyDown(Enum.KeyCode.A) then Direction -= cam.CFrame.RightVector end
+		if UserInputService:IsKeyDown(Enum.KeyCode.D) then Direction += cam.CFrame.RightVector end
+		if UserInputService:IsKeyDown(Enum.KeyCode.Space) then Direction += Vector3.yAxis end
+		if UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) then Direction -= Vector3.yAxis end
+
+		BV.Velocity = Direction.Unit * FlySpeed
+		BG.CFrame = cam.CFrame
+	end
+
+	-- VEHICLE FLY
+	if VehicleFly and Humanoid.SeatPart and Humanoid.SeatPart:IsA("VehicleSeat") then
+		if not BV then startFly(Humanoid.SeatPart) end
+	end
+end)
